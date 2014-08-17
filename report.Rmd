@@ -1,0 +1,60 @@
+Classification of the Weight Lifting Exercises Dataset
+==============================================================
+
+The goal is to predict the manner (variable `classe`) in the weight lifting exercises dataset.
+
+## Input and Data Splitting
+The data set has already been divided into the training set and the test set. We can read the data using `read.csv`, and remove the variables which have missing values. Then we change some variables into factors.
+```{r}
+training <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
+training <- training[, colSums(is.na(training) | training == "") == 0]
+training$classe <- factor(training$classe)
+training$X <- NULL
+training$user_name <- factor(training$user_name)
+training$cvtd_timestamp <- strftime(training$cvtd_timestamp, "%d/%m/%Y %H:%M")
+training$new_window <- factor(training$new_window)
+
+testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
+testing$user_name <- factor(testing$user_name)
+testing$cvtd_timestamp <- strftime(testing$cvtd_timestamp, "%d/%m/%Y %H:%M")
+testing$new_window <- factor(testing$new_window)
+```
+
+To compare different methods, we have to split the data in order to do the cross validation. As there are large amounts of data and training the model can take too much time, we use the 5-fold method here, although 10-fold method is more common.
+```{r}
+library(caret)
+set.seed(1357)
+folds <- createFolds(y = training$classe, k = 5, list = TRUE, returnTrain = TRUE)
+sapply(folds, length)
+```
+
+## Training and Cross Validation
+There are so many methods to do the classification. Here we use four methods to fit the model, and do the cross validation to estimate the accuracy. We need a function to work on all the folds, fit the model and calculate the accuracy.
+```{r}
+accuracy <- function(method) {
+    result <- sapply(folds, function(inTrain) {
+        fit <- train(classe ~ ., data = training[inTrain, ], method = method)
+        mean(predict(fit, training[-inTrain, ]) == training[-inTrain, ]$classe)
+    })
+    c(result, accuracy = mean(result), error = 1 - mean(result))
+}
+```
+1. CART - Classification And Regression Trees: `rpart`
+```{r, cache = TRUE}
+accuracy("rpart")
+```
+2. Linear Discriminant Analysis: `lda`
+```{r, cache = TRUE, warning = FALSE}
+accuracy("lda")
+```
+3. Support Vector Machines with Linear Kernel: `svmLinear`
+```{r, cache = TRUE}
+accuracy("svmLinear")
+```
+4. Support Vector Machines with Radial Basis Function Kernel: `svmRadial`
+```{r, cache = TRUE}
+accuracy("svmRadial")
+```
+
+## Results
+It is clear that `svmRadial` has the best performance among the four methods in machine learning. The estimated accuracy is 93.32% and the out of sample error is expected to be only 6.68%. In fact, if we submit the predictions on the test set from the results of `svmRadial`, 19 out of 20 predictions are correct. The method `lda` and `svmLinear` can both get the right answer on the incorrect prediction of `svmRadial`, but their overall accuracy on the test set is not so high. Anyway, it is easy to get all the 20 problems correct with a combination of the methods in this report.
